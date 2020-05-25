@@ -1,0 +1,12 @@
+{
+  "name": "crawler",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.19.2",
+    "cheerio": "^1.0.0-rc.3",
+    "crawler": "^1.2.1",
+    "image-downloader": "^4.0.1"
+  }
+}
