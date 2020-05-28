@@ -19,117 +19,123 @@ var set = new Set()
 //Objeto que só permite que seja armazenado valores únicos - "Dos sublinks"
 var setSubLinks = new Set()
 
-//Regex para verificar se o link está formato correto
-var urlRegex = /(https?:\/\/[^\s]+)/g;
+// variavel para fazer com que a funcao 'crawFirstPage' seja invocada 1 vez
+let count = 0;
+
+// Funcao para baixar imagens
+function downloadImages(value) {
+    const options = {
+        url: `${value}`,
+        dest: './images'
+    }
+    download.image(options)
+        .then(({ filename }) => { console.log('Imagem salva') })
+        .catch((err) => { })
+}
+
+// Faz o crawl da pagina
+function craw($, urlBase) {
+    $('a').each(function () {
+        var value = $(this).attr('href')
+        if (value !== undefined && value !== null) {
+            if (value.toLowerCase().split('.').pop() === 'jpg' || value.toLowerCase().split('.').pop() === 'jpeg') {
+                if (value.startsWith('/')) {
+                    value = `${urlBase}${value}`
+                    downloadImages(value)
+                } else if (value.startsWith('https://') || value.startsWith('http://')) {
+                    value = value
+                    downloadImages(value)
+                }
+            }
+            if (value.startsWith('/')) {
+                value = `${urlBase}${value}`
+                set.add(value)
+            }
+        }
+    });
+    arr = Array.from(set)
+
+    //Coloca todos os sublinks da página principal na fila 
+    for (let i of arr) {
+        c._pushToQueue({ uri: i })
+    }
+}
+
+//Cria arquivo Link.txt para armazenar os links
+var file = fs.createWriteStream('Links.txt');
+console.time()
 
 //instancia um novo crawler 
 var c = new Crawler({
-
     //Número de workers 
-    maxConnections: 4,
+    //maxConnections: 10,
+
+    // Tempo que irá fazer cada requisição, se colocar rateLimit o maxConnection é forçado a ser '1'
+    // 1000 ms
+    rateLimit: 1000,
 
     // Cada vez que uma página é 'crawled', a função é invocada
     callback: function (error, res, done) {
         if (error) {
-            console.log(error);
+            return
         } else {
             var $ = res.$;
+            let urlBase = new URL(res.request.uri.href).origin
+
             //Verificando cada tag <a>
-            $('a').each(function () {
-                var value = $(this).attr('href')
-                if (urlRegex.exec(value) !== null) {
-                    set.add(value)
-                }
-            });
-            arr = Array.from(set)
+            if (count == 0) {
+                craw.call(this,$,urlBase)
+            }
 
             //Verificando cada tag <img> e baixando as imagens
-            $('img').each(function () {
-                var value = $(this).attr('src')
-                if ((value) !== null && (value) !== undefined) {
-                    const options = {
-                        url: value,
-                        dest: './images'
-                    }
-                    download.image(options)
-                        .then(({ filename }) => {
-                            console.log('Saved to', filename)
-                        })
-                        .catch((err) => console.error(err))
-                }
-            });
-
-            //instanciando outro crawler para os sublinks
-            var d = new Crawler({
-                rateLimit: 1000,// Tempo para cada requisição em 'ms'
-                maxConnections: 10,
-                callback: function (error, res, done) {
-                    if (error) {
-                        return console.log(error);
-                    } else {
-                        //Pega a resposta da requisição
-                        //Se for HTML entra na condição
-                        var $ = res.$;
-                        if (res.$) {
-                            $('a').each(function () {
-                                var value = $(this).attr('href')
-                                if (urlRegex.exec(value) !== null) {
-                                    setSubLinks.add(value)
-                                }
-                            });
-                            subLinks = (Array.from(setSubLinks)).concat(arr)
-                            var file = fs.createWriteStream('Links.txt');
-                            file.on('error', function (err) { Console.log(err) });
-                            subLinks.forEach(value => file.write(`${value}\r\n`));
-                            file.end();
-                        }
-
-
-                        //instanciando outro crawler para baixas imagens dos sublinks
-                        var e = new Crawler({
-                            rateLimit: 1000,
-                            maxConnections: 10,
-                            callback: function (error, res, done) {
-                                if (error) {
-                                    return console.log(error);
-                                } else {
-                                    var $ = res.$;
-                                    if (res.$) {
-                                        $('img').each(function () {
-                                            var value = $(this).attr('src')
-                                            if ((value) !== null && (value) !== undefined) {
-                                                const options = {
-                                                    url: value,
-                                                    dest: './images'
-                                                }
-                                                download.image(options)
-                                                    .then(({ filename }) => {
-                                                        console.log('Saved to', filename)
-                                                    })
-                                                    .catch((err) => console.error(err))
-                                            }
-                                        });
-                                    }
-
-                                    done();
-                                }
-
+            if (res.$) {
+                $('a').each(function () {
+                    var value = $(this).attr('href')
+                    if (value !== undefined && value !== null) {
+                        if (value.toLowerCase().split('.').pop() === 'jpg' || value.toLowerCase().split('.').pop() === 'jpeg') {
+                            if (value.startsWith('/')) {
+                                value = `${urlBase}${value}`
+                                downloadImages(value)
+                            } else if (value.startsWith('https://') || value.startsWith('http://')) {
+                                value = value
+                                downloadImages(value)
                             }
-                        });
-                        //Fila das páginas que serão 'crawled' para baixar imagens
-                        e.queue(subLinks);
+                        }
+                        if (value.startsWith('/')) {
+                            value = `${urlBase}${value}`
+                            setSubLinks.add(value)
+                        }
                     }
-                    done();
-                }
-            });
-            //Fila das páginas que serão 'crawled' para obter sublinks
-            d.queue(arr);
+                });
+
+                $('img').each(function () {
+                    var value = $(this).attr('src')
+                    if ((value) !== null && (value) !== undefined) {
+                        if (value.startsWith('/')) {
+                            // caso de link relativo do tipo  /exemplo/....
+                            value = `${urlBase}${value}`
+                        } else if (value.startsWith('https://') || value.startsWith('http://')) {
+                            value = value
+                        }
+                        downloadImages(value)
+                    }
+                });
+            }
+            count++
+        }
+        //Adiciona os sublinks + os links da primeira pagina no arquivo Links.txt
+        if (c.queueSize == 1) {
+            subLinks = (Array.from(setSubLinks)).concat(arr)
+            file.on('error', function (err) { });
+            subLinks.forEach(value => file.write(`${value}\r\n`));
+            file.end();
+            console.timeEnd()
         }
         done();
     }
 });
+
 //URL principal onde irá começar o crawl
 c.queue([
-    'https://jovemnerd.com.br/bunker/tag/detroid-become-human/'
+    'http://www.ucp.br/index.php?lang=pt'
 ]);
-
